@@ -1,5 +1,6 @@
 import 'package:analysis_server_plugin/plugin.dart';
 import 'package:analysis_server_plugin/registry.dart';
+import 'package:clean_architecture_analysis_plugin/src/rules/architecture/task_either_run_outside_bloc_handler.dart';
 
 import 'rules/architecture/disallowed_external_dependency.dart';
 import 'rules/architecture/layer_dependency_direction.dart';
@@ -20,5 +21,6 @@ class AnalysisPlugin extends Plugin {
     registry.registerWarningRule(NoCrossFeatureImport());
     registry.registerWarningRule(NoFeatureImportInGlobal());
     registry.registerWarningRule(DisallowedExternalDependency());
+    registry.registerWarningRule(TaskEitherRunOutsideBlocHandler());
   }
 }

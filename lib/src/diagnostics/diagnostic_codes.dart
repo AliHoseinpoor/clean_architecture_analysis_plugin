@@ -11,6 +11,12 @@ import 'package:analyzer/error/error.dart';
 /// (`diagnostics: pulse_x: true`) and suppressing a diagnostic
 /// (`// ignore: pulse_analysis_plugin/pulse_x`) use the same identifier.
 abstract final class PulseDiagnosticCodes {
+  static const LintCode taskEitherRunOutsideBlocHandler = LintCode(
+    'pulse_task_either_run_outside_bloc_handler',
+    'TaskEither.run() must only be called inside a Bloc event handler.',
+    correctionMessage:
+    'Return or pass the TaskEither upward and call .run() in the Bloc event handler.',
+  );
   static const LintCode invalidLayerDependency = LintCode(
     'pulse_invalid_layer_dependency',
     "The '{0}' layer must not depend on the '{1}' layer.",

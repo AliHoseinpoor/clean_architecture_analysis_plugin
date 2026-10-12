@@ -30,6 +30,7 @@ final class PulseArchitecture {
     this.layers = _defaultLayers,
     this.globalModules = _defaultGlobalModules,
     this.allowedLayerDependencies = _defaultAllowedLayerDependencies,
+    this.restrictedLayerDependencies = _defaultRestrictedLayerDependencies,
     this.allowedExternalDependencies = _defaultAllowedExternalDependencies,
     this.crossFeatureAccess = CrossFeatureAccess.forbidden,
     this.compositionRootSegments = _defaultCompositionRootSegments,
@@ -55,6 +56,15 @@ final class PulseArchitecture {
   /// noise.
   final Map<String, Set<String>> allowedLayerDependencies;
 
+  /// Allowed layer dependencies that may only reach some folders of the
+  /// target layer.
+  ///
+  /// `from -> to -> folders`: when `from` imports `to`, the first folder below
+  /// `to` must be one of `folders`. A pair absent from this map is governed by
+  /// [allowedLayerDependencies] alone. A pair present here must also be
+  /// allowed there; this map only narrows it.
+  final Map<String, Map<String, Set<String>>> restrictedLayerDependencies;
+
   /// For each layer, the external dependencies it may import.
   ///
   /// Keys are layer names; values are dependency identifiers in the form
@@ -72,13 +82,26 @@ final class PulseArchitecture {
   final Set<String> compositionRootSegments;
 
   /// Whether [from] may depend on [to].
-  bool allowsLayerDependency({required String from, required String to}) {
+  ///
+  /// [targetFolder] is the first folder below the target layer
+  /// (`errors` for `domain/errors/auth_error.dart`), or `null` when the target
+  /// sits directly in the layer folder. It only matters for pairs listed in
+  /// [restrictedLayerDependencies].
+  bool allowsLayerDependency({
+    required String from,
+    required String to,
+    String? targetFolder,
+  }) {
     if (from == to) return true;
 
     final allowed = allowedLayerDependencies[from];
     if (allowed == null) return true;
+    if (!allowed.contains(to)) return false;
 
-    return allowed.contains(to);
+    final folders = restrictedLayerDependencies[from]?[to];
+    if (folders == null) return true;
+
+    return targetFolder != null && folders.contains(targetFolder);
   }
 
   /// Whether [layer] may depend on the external dependency [identifier]
@@ -94,23 +117,30 @@ final class PulseArchitecture {
 
   static const Set<String> _defaultGlobalModules = {'bootstrap', 'core', 'design_system', 'shared'};
 
-  // NOTE — two deliberate policy choices, both easy to flip:
+  // NOTE — two deliberate policy choices:
   //
-  //  * `presentation -> domain` is ALLOWED here. Forbidding it (as the first
-  //    draft of this plugin did) means a BLoC cannot even name a domain
-  //    entity, which forces a parallel set of presentation models for every
-  //    entity in the system. That is a defensible but expensive stance; if you
-  //    want it, remove 'domain' from the presentation set.
+  //  * `presentation -> domain` is allowed only into `domain/errors/` and
+  //    `domain/value_objects/` (Pulse ADR-020 §1–2 as amended by ADR-032 §1).
+  //    A bloc must pattern-match operation errors, and a form validates
+  //    through value objects; entities, repositories (ports) and domain
+  //    services stay behind the boundary, because entities carry mutating
+  //    behaviour the UI must not call. See [_defaultRestrictedLayerDependencies].
   //
   //  * `infrastructure -> application` is FORBIDDEN here. Infrastructure
   //    implements ports declared by the inner layers; if it needs to call a
   //    use case, the dependency is pointing the wrong way. If your ports live
   //    in `application` rather than `domain`, add 'application' back.
   static const Map<String, Set<String>> _defaultAllowedLayerDependencies = {
-    'presentation': {'application'},
+    'presentation': {'application', 'domain'},
     'application': {'domain'},
     'domain': <String>{},
     'infrastructure': {'domain'},
+  };
+
+  static const Map<String, Map<String, Set<String>>> _defaultRestrictedLayerDependencies = {
+    'presentation': {
+      'domain': {'errors', 'value_objects'},
+    },
   };
 
   static const Set<String> _pureDartLibraries = {
@@ -124,7 +154,19 @@ final class PulseArchitecture {
 
   static const Map<String, Set<String>> _defaultAllowedExternalDependencies = {
     'domain': {..._pureDartLibraries, 'package:meta', 'package:collection', 'package:equatable', 'package:fpdart'},
-    'application': {..._pureDartLibraries, 'package:meta', 'package:collection', 'package:equatable', 'package:fpdart'},
+    // `injectable` and `freezed_annotation` are pure-Dart annotation packages.
+    // Use cases and mappers register themselves with `@injectable` (Pulse
+    // ADR-024 §3) and UiModels may be Freezed (ADR-020 §3). Domain stays free
+    // of both (ADR-020 §1, ADR-021 §7).
+    'application': {
+      ..._pureDartLibraries,
+      'package:meta',
+      'package:collection',
+      'package:equatable',
+      'package:fpdart',
+      'package:injectable',
+      'package:freezed_annotation',
+    },
     // 'presentation' and 'infrastructure' are intentionally absent: they are
     // the layers that are supposed to depend on frameworks and SDKs.
   };

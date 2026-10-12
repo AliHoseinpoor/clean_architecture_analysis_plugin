@@ -43,9 +43,16 @@ class LayerDependencyDirection extends DependencyRule {
     final targetLayer = destination.layer;
     if (targetLayer == null) return;
 
+    // A file directly in the layer folder has no folder of its own, so the
+    // only segment left is its file name.
+    final targetFolder = destination.layerRelativeSegments.length > 1
+        ? destination.layerRelativeSegments.first
+        : null;
+
     if (architecture.allowsLayerDependency(
       from: sourceLayer,
       to: targetLayer,
+      targetFolder: targetFolder,
     )) {
       return;
     }
